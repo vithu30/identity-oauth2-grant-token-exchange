@@ -26,22 +26,14 @@ import com.nimbusds.jose.crypto.RSASSASigner;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.testng.Assert;
-import org.testng.annotations.AfterSuite;
 import org.testng.annotations.AfterTest;
-import org.testng.annotations.BeforeMethod;
-import org.testng.annotations.BeforeSuite;
 import org.testng.annotations.BeforeTest;
 import org.testng.annotations.Test;
 import org.wso2.carbon.identity.application.common.model.IdentityProvider;
 import org.wso2.carbon.identity.application.common.model.IdentityProviderProperty;
-import org.wso2.carbon.identity.application.common.util.IdentityApplicationManagementUtil;
-import org.wso2.carbon.identity.core.model.IdentityCacheConfig;
-import org.wso2.carbon.identity.core.util.IdentityUtil;
 import org.wso2.carbon.identity.oauth.config.OAuthServerConfiguration;
 import org.wso2.carbon.identity.oauth2.IdentityOAuth2Exception;
 import org.wso2.carbon.identity.oauth2.dto.OAuth2AccessTokenReqDTO;
@@ -52,15 +44,12 @@ import org.wso2.carbon.identity.oauth2.token.OAuthTokenReqMessageContext;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.NoSuchAlgorithmException;
-import java.security.cert.X509Certificate;
 import java.security.interfaces.RSAPrivateKey;
 import java.time.Instant;
 import java.util.Date;
 import java.util.HashMap;
 
-import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.eq;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.when;
@@ -71,14 +60,16 @@ public class TokenExchangeGrantHandlerTest {
     private IdentityProvider idp;
     private OAuthTokenReqMessageContext tokReqMsgCtx;
     MockedStatic<TokenExchangeUtils> tokenExchangeUtils;
-    MockedStatic<OAuthServerConfiguration> serverConfiguration;
-    TokenExchangeGrantHandler tokenExchangeGrantHandler;
+    private TokenExchangeGrantHandler tokenExchangeGrantHandler;
 
     @BeforeTest
     public void init() throws Exception {
 
         tokenExchangeUtils = mockStatic(TokenExchangeUtils.class);
-        serverConfiguration = mockStatic(OAuthServerConfiguration.class);
+
+        OAuthServerConfiguration serverConfiguration = mock(OAuthServerConfiguration.class);
+        mockStatic(OAuthServerConfiguration.class);
+        when(OAuthServerConfiguration.getInstance()).thenReturn(serverConfiguration);
 
         OAuth2AccessTokenReqDTO oAuth2AccessTokenReqDTO = new OAuth2AccessTokenReqDTO();
         oAuth2AccessTokenReqDTO.setClientId("");
@@ -107,38 +98,40 @@ public class TokenExchangeGrantHandlerTest {
         tokenExchangeUtils.when(() -> TokenExchangeUtils.getIDPAlias(idp, tenantDomain)).thenReturn("7N7vQHZbJtPnzegtGXJvvwDL4wca");
         tokenExchangeUtils.when(() -> TokenExchangeUtils.handleException(Mockito.anyString(), Mockito.anyString()))
                 .thenThrow(new IdentityOAuth2Exception("Signature Message Authentication invalid"));
-//        identityUtil.when(() -> IdentityUtil.getProperty(Constants.JWKS_VALIDATION_ENABLE_CONFIG)).thenReturn("true");
+        tokenExchangeGrantHandler = new TokenExchangeGrantHandler();
     }
 
     @Test
     public void testValidateGrant() throws Exception {
 
-        tokenExchangeGrantHandler = new TokenExchangeGrantHandler();
-        when(TokenExchangeUtils.validateSignature(signedJWT, idp, "carbon.super")).thenReturn(true);
-        when(TokenExchangeUtils.checkExpirationTime(eq(signedJWT.getJWTClaimsSet().getExpirationTime()),
-                eq(System.currentTimeMillis()), Mockito.anyLong())).thenReturn(true);
-        when(TokenExchangeUtils.validateIssuedAtTime(eq(signedJWT.getJWTClaimsSet().getIssueTime()),
-                eq(System.currentTimeMillis()), Mockito.anyLong(), Mockito.anyInt())).thenReturn(true);
+        tokenExchangeUtils.when(() -> TokenExchangeUtils.validateSignature(signedJWT, idp, "carbon.super"))
+                .thenReturn(true);
+        tokenExchangeUtils.when(() -> TokenExchangeUtils.checkExpirationTime(eq(signedJWT.getJWTClaimsSet()
+                        .getExpirationTime()), eq(System.currentTimeMillis()), Mockito.anyLong())).thenReturn(true);
+        tokenExchangeUtils.when(() -> TokenExchangeUtils.validateIssuedAtTime(eq(signedJWT.getJWTClaimsSet()
+                        .getIssueTime()), eq(System.currentTimeMillis()), Mockito.anyLong(), Mockito.anyInt()))
+                .thenReturn(true);
         boolean isValid = tokenExchangeGrantHandler.validateGrant(tokReqMsgCtx);
         Assert.assertTrue(isValid);
     }
-//
-//    @Test
-//    public void testValidateGrantSignatureValidationException() throws Exception {
-//
-//        try {
-//            when(TokenExchangeUtils.validateSignature(signedJWT, idp, "carbon.super")).thenReturn(false);
-//            when(TokenExchangeUtils.checkExpirationTime(eq(signedJWT.getJWTClaimsSet().getExpirationTime()),
-//                    eq(System.currentTimeMillis()), Mockito.anyLong())).thenReturn(true);
-//            when(TokenExchangeUtils.validateIssuedAtTime(eq(signedJWT.getJWTClaimsSet().getIssueTime()),
-//                    eq(System.currentTimeMillis()), Mockito.anyLong(), Mockito.anyInt())).thenReturn(true);
-//            TokenExchangeGrantHandler tokenExchangeGrantHandler = new TokenExchangeGrantHandler();
-//            tokenExchangeGrantHandler.validateGrant(tokReqMsgCtx);
-//            Assert.fail("Expected exception not thrown");
-//        } catch (IdentityOAuth2Exception e) {
-//            Assert.assertEquals("Signature Message Authentication invalid", e.getMessage());
-//        }
-//    }
+
+    @Test
+    public void testValidateGrantSignatureValidationException() throws Exception {
+
+        try {
+            tokenExchangeUtils.when(() -> TokenExchangeUtils.validateSignature(signedJWT, idp, "carbon.super"))
+                    .thenReturn(false);
+            tokenExchangeUtils.when(() -> TokenExchangeUtils.checkExpirationTime(eq(signedJWT.getJWTClaimsSet()
+                            .getExpirationTime()), eq(System.currentTimeMillis()), Mockito.anyLong())).thenReturn(true);
+            tokenExchangeUtils.when(() -> TokenExchangeUtils.validateIssuedAtTime(eq(signedJWT.getJWTClaimsSet()
+                            .getIssueTime()), eq(System.currentTimeMillis()), Mockito.anyLong(), Mockito.anyInt()))
+                    .thenReturn(true);
+            tokenExchangeGrantHandler.validateGrant(tokReqMsgCtx);
+            Assert.fail("Expected exception not thrown");
+        } catch (IdentityOAuth2Exception e) {
+            Assert.assertEquals("Signature Message Authentication invalid", e.getMessage());
+        }
+    }
 
     private SignedJWT getJWTTypeSubjectToken() throws NoSuchAlgorithmException, JOSEException {
 
